@@ -1,3 +1,5 @@
+/* Search bar */
+
 .advanced-search-bar {
     display: flex;
     margin-top: 12px;
@@ -47,6 +49,8 @@
     fill: #1C212F;
 }
 
+/* Tags */
+
 .advanced-search-tag {
     position: relative;
     border: 1px solid #DFE3E8;
@@ -60,9 +64,11 @@
     cursor: pointer;
 }
 
-.advanced-search-tag input {
+/* Tag name */
+.ast-name {
     border: none;
     outline: none;
+    padding: 0;
     font-size: 14px;
     color: #8091A5;
     font-weight: 600;

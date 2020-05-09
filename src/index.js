@@ -11,6 +11,7 @@ import { PrismicClient } from '/lib/prismic.js'
 import { gql } from '/lib/graphql.js'
 import moment from '/lib/moment.js'
 import { SVG, saveSolid, timesCircleSolid } from '/lib/svg.js'
+import Input from '/lib/ui/input.js'
 
 const CUSTOM_TYPES_QUERY = gql`
 query types {
@@ -214,7 +215,8 @@ const SearchBar = () => {
             </span>
             ${savedQueries.map((q, i) => html`
                 <span class=advanced-search-tag onClick=${() => search(queryables, q.value)}>
-                    <input
+                    <${Input}
+                        class="ast-name"
                         disabled=${!(i === 0 && namingQuery)}
                         value=${q.name}
                         onInput=${e => nameQuery(i, e.target.value)}
