@@ -31,7 +31,7 @@ query inputs {
 const makeSearchQuery = (types, variables) => gql`
 query search {
     ${types.map(t => `
-    ${t.type}(where: ${objToGqlVar(variables)}) {
+    ${t.type}(first: 50, where: ${objToGqlVar(fullTextIfNecessary(t, variables))}) {
         edges {
             node {
                 ${t.summary ? `summary: ${t.summary}` : ''}
@@ -47,10 +47,25 @@ query search {
 }
 `
 
+const domLoaded = () => new Promise(resolve => {
+    if (/complete|interactive|loaded/.test(document.readyState)) resolve()
+    else document.addEventListener('DOMContentLoaded', resolve, false);
+})
+
 const parseQuery = query => {
     const entries = query.split(',').map(kv => kv.split(':').map(s => s.trim()))
     return Object.fromEntries(entries)
 }
+
+const fullTextIfNecessary = (type, queryObj) => (
+    Object.fromEntries(Object.entries(queryObj).map(([key, value]) => {
+        const fullTextKey = key + '_fulltext'
+        const hasNonFullText = type.inputFields.find(f => f.name === key)
+        const hasFullText = type.inputFields.find(f => f.name === fullTextKey)
+        const onlyHasFullText = !hasNonFullText && hasFullText
+        return [onlyHasFullText ? fullTextKey : key, value]
+    }))
+)
 
 const objToGqlVar = obj => JSON.stringify(obj).replace(/"([^"]+)":/g, '$1:')
 
@@ -76,9 +91,6 @@ const getQueryables = async () => {
     })
 }
 
-const controlsEl = document.querySelector('#app>#viewport section#documents .controls')
-const tbodyEl = document.querySelector('#app>#viewport section#documents .items .versions-list table tbody')
-
 const makeDocDOM = n => `
 <tr class="list__item" href="/documents~b=working&c=unclassified/${n._meta.id}/">
     <td class="list__item-icon">
@@ -94,14 +106,6 @@ const makeDocDOM = n => `
 </tr>
 `
 
-const editButtonDOM = `
-<button class="write-button" data-context="working">
-<svg height="20" width="20" viewBox="0 0 20 20" class="icon edit">
-  <use xlink:href="#md-edit"></use>
-</svg>
-<span>Create new</span></button>
-`
-
 const SearchBar = () => {
     const [query, setQuery] = useState('')
     const queryables = usePromise(getQueryables)
@@ -115,12 +119,15 @@ const SearchBar = () => {
         // need the schema to make the search request
         if (!queryables) return
 
+        // invalid query
+        if (!query || !query.includes(':')) return
+
         // dissect the query
         const variables = parseQuery(query)
         const keys = Object.keys(variables)
 
-        // ONLY types that have all the query fields asked for
-        const types = queryables.filter(q => keys.every(k => q.inputFields.some(f => f.name === k)))
+        // ONLY types that have all the query fields asked for (or the fulltext version)
+        const types = queryables.filter(q => keys.every(k => q.inputFields.some(f => f.name === k || f.name === k + '_fulltext')))
         const notypes = !types.length
 
         // make request, transform response
@@ -128,23 +135,33 @@ const SearchBar = () => {
         const nodes = notypes ? [] : Object.values(searchResponse.data).map(t => t.edges.map(edge => edge.node)).flat()
 
         // inject results into DOM
+        const tbodyEl = document.querySelector('#app>#viewport section#documents .items .versions-list table tbody')
         tbodyEl.innerHTML = nodes.map(makeDocDOM)
 
-        // TODO styles + move edit button + override normal search + handle noquery case
-        // TODO since it doesn't reset, empty it when the url changes (later)
-        // TODO field_fulltext vs field (later)
-        // TODO don't paginate, just make it first 100 results each type (later)
+        // TODO load faster
+        // TODO add saveables
+        // TODO handle error better (later)
+        // TODO empty the input when the url changes (later)
     })
 
     return html`
         <div>
-            <input id="advanced-search-input" type=text value=${query} onInput=${e => setQuery(e.target.value)} />
+            <input
+                id="advanced-search-input"
+                type=text
+                value=${query}
+                onInput=${e => setQuery(e.target.value)}
+                placeholder="Advanced Search"
+            />
         </div>
     `
 }
 
 export async function main() {
+    await domLoaded
+    const controlsEl = document.querySelector('#app>#viewport section#documents .controls')
+    const filtersEl = document.getElementById('documents-filter-values')
     const root = document.createElement('div')
-    controlsEl.appendChild(root)
+    controlsEl.insertBefore(root, filtersEl)
     render(html`<${SearchBar} />`, root)
 }

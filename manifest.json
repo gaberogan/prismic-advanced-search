@@ -14,7 +14,7 @@
     "content_scripts": [{
         "css": ["src/index.css"],
         "js": ["content_script.js"],
-        "run_at": "document_idle",
+        "run_at": "document_start",
         "matches": [
             "https://*.prismic.io/documents/working*"
         ]
