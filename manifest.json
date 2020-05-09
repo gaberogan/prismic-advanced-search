@@ -20,7 +20,8 @@
         ]
     }],
     "permissions": [
-        "https://*.prismic.io/documents/working*"
+        "https://*.prismic.io/documents/working*",
+        "storage"
     ],
     "web_accessible_resources": [
         "*"

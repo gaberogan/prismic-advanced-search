@@ -1,7 +1,16 @@
-import { html, render, useState, usePromise, useEventListener } from '/lib/react.js'
+import {
+    html,
+    render,
+    useState,
+    useEffect,
+    usePromise,
+    useEventListener,
+    useSyncStorage,
+} from '/lib/react.js'
 import { PrismicClient } from '/lib/prismic.js'
 import { gql } from '/lib/graphql.js'
 import moment from '/lib/moment.js'
+import { SVG, saveSolid, timesCircleSolid } from '/lib/svg.js'
 
 const CUSTOM_TYPES_QUERY = gql`
 query types {
@@ -51,6 +60,17 @@ const domLoaded = () => new Promise(resolve => {
     if (/complete|interactive|loaded/.test(document.readyState)) resolve()
     else document.addEventListener('DOMContentLoaded', resolve, false);
 })
+
+const wait = (ms) => new Promise(resolve => setTimeout(() => resolve(), ms))
+
+const retryWhileFalsy = async (func, interval) => {
+    let result
+    while (!result) {
+        result = await func()
+        await wait(interval)
+    }
+    return result
+}
 
 const parseQuery = query => {
     const entries = query.split(',').map(kv => kv.split(':').map(s => s.trim()))
@@ -106,61 +126,116 @@ const makeDocDOM = n => `
 </tr>
 `
 
+const search = async (queryables, query) => {
+    // need the schema to make the search request
+    if (!queryables) return
+
+    // invalid query
+    if (!query || !query.includes(':')) return
+
+    // dissect the query
+    const variables = parseQuery(query)
+    const keys = Object.keys(variables)
+
+    // ONLY types that have all the query fields asked for (or the fulltext version)
+    const types = queryables.filter(q => keys.every(k => q.inputFields.some(f => f.name === k || f.name === k + '_fulltext')))
+    const notypes = !types.length
+
+    // make request, transform response
+    const searchResponse = notypes || await PrismicClient.query({ query: makeSearchQuery(types, variables) })
+    const nodes = notypes ? [] : Object.values(searchResponse.data).map(t => t.edges.map(edge => edge.node)).flat()
+
+    // inject results into DOM
+    const tbodyEl = document.querySelector('#app>#viewport section#documents .items .versions-list table tbody')
+    tbodyEl.innerHTML = nodes.map(makeDocDOM)
+
+    // TODO info icon
+    // TODO naming saved queries. only save if valid
+    // TODO handle error better (later)
+    // TODO empty the input when the url changes (later)
+}
+
 const SearchBar = () => {
     const [query, setQuery] = useState('')
+    const [namingQuery, setNamingQuery] = useState(false)
     const queryables = usePromise(getQueryables)
+    const [savedQueries, setSavedQueries] = useSyncStorage('savedQueries', [])
 
+    // Save new search
+    const saveQuery = q => () => {
+        setNamingQuery(true)
+        setSavedQueries([q].concat(savedQueries))
+    }
+
+    // Name query
+    const nameQuery = (i, name) => {
+        setSavedQueries(savedQueries.map((q, idx) => i === idx ? { ...q, name } : q))
+    }
+
+    // Forget search
+    const forgetQuery = i => e => {
+        e.stopImmediatePropagation()
+        setSavedQueries(savedQueries.filter((_, idx) => i !== idx))
+    }
+
+    // Focus/select new search to name it
+    useEffect(() => {
+        if (!namingQuery) return
+        const firstTag = document.querySelector('.advanced-search-tag input')
+        firstTag.focus()
+        firstTag.select()
+    }, [namingQuery])
+
+    // Search on 'Enter'
     useEventListener('keydown', async e => {
         // only on press enter while input focused
         if (e.keyCode !== 13) return
-        const el = document.getElementById('advanced-search-input')
+        const el = document.querySelector('.advanced-search-input')
         if (el !== document.activeElement) return
 
-        // need the schema to make the search request
-        if (!queryables) return
-
-        // invalid query
-        if (!query || !query.includes(':')) return
-
-        // dissect the query
-        const variables = parseQuery(query)
-        const keys = Object.keys(variables)
-
-        // ONLY types that have all the query fields asked for (or the fulltext version)
-        const types = queryables.filter(q => keys.every(k => q.inputFields.some(f => f.name === k || f.name === k + '_fulltext')))
-        const notypes = !types.length
-
-        // make request, transform response
-        const searchResponse = notypes || await PrismicClient.query({ query: makeSearchQuery(types, variables) })
-        const nodes = notypes ? [] : Object.values(searchResponse.data).map(t => t.edges.map(edge => edge.node)).flat()
-
-        // inject results into DOM
-        const tbodyEl = document.querySelector('#app>#viewport section#documents .items .versions-list table tbody')
-        tbodyEl.innerHTML = nodes.map(makeDocDOM)
-
-        // TODO load faster
-        // TODO add saveables
-        // TODO handle error better (later)
-        // TODO empty the input when the url changes (later)
+        search(queryables, query)
     })
 
     return html`
-        <div>
-            <input
-                id="advanced-search-input"
-                type=text
-                value=${query}
-                onInput=${e => setQuery(e.target.value)}
-                placeholder="Advanced Search"
-            />
-        </div>
+        <span class=advanced-search-bar>
+            <span class=advanced-search-input-box>
+                <input
+                    class=advanced-search-input
+                    type=text
+                    value=${query}
+                    onInput=${e => setQuery(e.target.value)}
+                    placeholder='Advanced Search'
+                />
+                <${SVG}
+                    src=${saveSolid}
+                    class=advanced-search-save
+                    onClick=${saveQuery({ name: 'New Search', value: query })}
+                />
+            </span>
+            ${savedQueries.map((q, i) => html`
+                <span class=advanced-search-tag onClick=${() => search(queryables, q.value)}>
+                    <input
+                        disabled=${!(i === 0 && namingQuery)}
+                        value=${q.name}
+                        onInput=${e => nameQuery(i, e.target.value)}
+                        onBlur=${() => setNamingQuery(false)}
+                    />
+                    <${SVG}
+                        src=${timesCircleSolid}
+                        class=advanced-search-tag-close
+                        onClick=${forgetQuery(i)}
+                    />
+                </span>
+            `)}
+        </span>
     `
 }
 
 export async function main() {
     await domLoaded
-    const controlsEl = document.querySelector('#app>#viewport section#documents .controls')
-    const filtersEl = document.getElementById('documents-filter-values')
+    const getControlsEl = () => document.querySelector('#app>#viewport section#documents .controls')
+    const controlsEl = await retryWhileFalsy(getControlsEl, 100)
+    const filtersEl = document.querySelector('#documents-filter-values')
     const root = document.createElement('div')
     controlsEl.insertBefore(root, filtersEl)
     render(html`<${SearchBar} />`, root)
