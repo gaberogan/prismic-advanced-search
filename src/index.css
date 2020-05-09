@@ -78,8 +78,11 @@
     display: none;
 }
 
-.advanced-search-tag:hover {
+.advanced-search-tag:hover, .advanced-search-tag.selected {
     border: 1px solid #1C212F;
+}
+
+.advanced-search-tag:hover input, .advanced-search-tag.selected input {
     color: #1C212F;
 }
 
@@ -100,6 +103,6 @@
     fill: #8091A5;
 }
 
-.advanced-search-tag:hover svg path {
+.advanced-search-tag:hover svg path, .advanced-search-tag.selected svg path {
     fill: #1C212F;
 }

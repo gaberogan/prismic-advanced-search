@@ -78,6 +78,8 @@ const parseQuery = query => {
     return Object.fromEntries(entries)
 }
 
+const isValidQuery = query => query.includes(':')
+
 const fullTextIfNecessary = (type, queryObj) => (
     Object.fromEntries(Object.entries(queryObj).map(([key, value]) => {
         const fullTextKey = key + '_fulltext'
@@ -127,12 +129,12 @@ const makeDocDOM = n => `
 </tr>
 `
 
-const search = async (queryables, query) => {
+const searchForDocs = async (queryables, query) => {
     // need the schema to make the search request
     if (!queryables) return
 
     // invalid query
-    if (!query || !query.includes(':')) return
+    if (!isValidQuery(query)) return
 
     // dissect the query
     const variables = parseQuery(query)
@@ -150,8 +152,9 @@ const search = async (queryables, query) => {
     const tbodyEl = document.querySelector('#app>#viewport section#documents .items .versions-list table tbody')
     tbodyEl.innerHTML = nodes.map(makeDocDOM)
 
+    return true // it worked
+
     // TODO info icon
-    // TODO naming saved queries. only save if valid
     // TODO handle error better (later)
     // TODO empty the input when the url changes (later)
 }
@@ -159,11 +162,19 @@ const search = async (queryables, query) => {
 const SearchBar = () => {
     const [query, setQuery] = useState('')
     const [namingQuery, setNamingQuery] = useState(false)
+    const [lastQueried, setLastQueried] = useState('')
     const queryables = usePromise(getQueryables)
     const [savedQueries, setSavedQueries] = useSyncStorage('savedQueries', [])
 
+    // Search
+    const search = async (q = query) => {
+        const worked = await searchForDocs(queryables, q)
+        if (worked) setLastQueried(q)
+    }
+
     // Save new search
     const saveQuery = q => () => {
+        if (!isValidQuery(query)) return
         setNamingQuery(true)
         setSavedQueries([q].concat(savedQueries))
     }
@@ -193,8 +204,7 @@ const SearchBar = () => {
         if (e.keyCode !== 13) return
         const el = document.querySelector('.advanced-search-input')
         if (el !== document.activeElement) return
-
-        search(queryables, query)
+        search()
     })
 
     return html`
@@ -214,7 +224,10 @@ const SearchBar = () => {
                 />
             </span>
             ${savedQueries.map((q, i) => html`
-                <span class=advanced-search-tag onClick=${() => search(queryables, q.value)}>
+                <span
+                    class=${`advanced-search-tag ${q.value === lastQueried ? 'selected' : ''}`}
+                    onClick=${() => search(q.value)}
+                >
                     <${Input}
                         class="ast-name"
                         disabled=${!(i === 0 && namingQuery)}
