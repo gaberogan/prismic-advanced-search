@@ -2,7 +2,7 @@
     "manifest_version": 2,
 
     "name": "Prismic Advanced Search",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "description": "The search feature Prisimic never gave us.",
     "icons": {
         "16": "src/img/icon16.png",
