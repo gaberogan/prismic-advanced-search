@@ -3,11 +3,12 @@
 .advanced-search-bar {
     display: flex;
     margin-top: 12px;
+    position: relative;
 }
 
 .advanced-search-input-box {
     display: flex;
-    width: 210px;
+    width: 250px;
     border: 1px solid #DFE3E8;
     border-radius: 4px;
     padding-left: 10px;
@@ -22,6 +23,10 @@
     outline: none;
     font-size: 14px;
     color: #1C212F;
+}
+
+.advanced-search-input::nth-letter(2) {
+    color: green
 }
 
 .advanced-search-input::placeholder {
@@ -105,4 +110,28 @@
 
 .advanced-search-tag:hover svg path, .advanced-search-tag.selected svg path {
     fill: #1C212F;
+}
+
+/* Autofill */
+
+.advanced-search-autofill {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border: 1px solid #DFE3E8;
+    border-radius: 4px;
+    position: absolute;
+    top: 43px;
+    left: -1px;
+    z-index: 1;
+    padding: 8px 0;
+}
+
+.advanced-search-autofill > span {
+    padding: 8px 16px 8px 16px;
+    cursor: pointer;
+}
+
+.advanced-search-autofill > span:hover {
+    background: #f7f7f7;
 }
